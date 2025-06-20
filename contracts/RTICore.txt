@@ -1,0 +1,82 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.19;
+
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+
+contract RTICore is ReentrancyGuard {
+    enum RequestStatus { PENDING, RESPONDED, EXPIRED }
+    
+    struct RTIRequest {
+        address requester;
+        string department;
+        string query;
+        uint256 bounty;
+        uint256 deadline;
+        RequestStatus status;
+        string responseCID;
+        address responder;
+    }
+    
+    uint256 public requestCount;
+    mapping(uint256 => RTIRequest) public requests;
+    
+    event RequestCreated(uint256 indexed requestId, address indexed requester, string department);
+    event RequestFulfilled(uint256 indexed requestId, string responseCID, address responder);
+    event RequestExpired(uint256 indexed requestId);
+    
+    function createRequest(
+        string memory _department,
+        string memory _query,
+        uint256 _daysToRespond
+    ) external payable {
+        require(msg.value > 0, "Bounty must be greater than 0");
+        require(_daysToRespond > 0, "Response days must be positive");
+        
+        requests[requestCount] = RTIRequest({
+            requester: msg.sender,
+            department: _department,
+            query: _query,
+            bounty: msg.value,
+            deadline: block.timestamp + (_daysToRespond * 1 days),
+            status: RequestStatus.PENDING,
+            responseCID: "",
+            responder: address(0)
+        });
+        
+        emit RequestCreated(requestCount, msg.sender, _department);
+        requestCount++;
+    }
+    
+    function fulfillRequest(uint256 _requestId, string memory _responseCID) external nonReentrant {
+        RTIRequest storage request = requests[_requestId];
+        
+        require(request.status == RequestStatus.PENDING, "Request not pending");
+        require(block.timestamp <= request.deadline, "Deadline passed");
+        
+        request.status = RequestStatus.RESPONDED;
+        request.responseCID = _responseCID;
+        request.responder = msg.sender;
+        
+        payable(msg.sender).transfer(request.bounty);
+        emit RequestFulfilled(_requestId, _responseCID, msg.sender);
+    }
+    
+    function checkAndExpireRequests() external {
+        for (uint256 i = 0; i < requestCount; i++) {
+            if (requests[i].status == RequestStatus.PENDING && 
+                block.timestamp > requests[i].deadline) {
+                requests[i].status = RequestStatus.EXPIRED;
+                payable(requests[i].requester).transfer(requests[i].bounty);
+                emit RequestExpired(i);
+            }
+        }
+    }
+    
+    function getAllRequests() external view returns (RTIRequest[] memory) {
+        RTIRequest[] memory allRequests = new RTIRequest[](requestCount);
+        for (uint256 i = 0; i < requestCount; i++) {
+            allRequests[i] = requests[i];
+        }
+        return allRequests;
+    }
+}

@@ -1,0 +1,102 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract RTIEscrow {
+    enum RTIStatus { Pending, Responded, Verified, Refunded }
+
+    struct RTIRequest {
+        address requester;
+        string ipfsHash;
+        uint256 bounty;
+        uint256 deadline;
+        address responder;
+        string responseIpfsHash;
+        RTIStatus status;
+    }
+
+    address public admin;
+    uint256 public rtiCount;
+    mapping(uint256 => RTIRequest) public rtiRequests;
+
+    event RTICreated(
+        uint256 indexed id,
+        address indexed requester,
+        string ipfsHash,
+        uint256 bounty,
+        uint256 deadline
+    );
+
+    event ResponseSubmitted(
+        uint256 indexed id,
+        address indexed responder,
+        string responseIpfsHash
+    );
+
+    event BountyReleased(
+        uint256 indexed id,
+        address indexed responder,
+        uint256 amount
+    );
+
+    event BountyRefunded(
+        uint256 indexed id,
+        address indexed requester,
+        uint256 amount
+    );
+
+    constructor() {
+        admin = msg.sender;
+    }
+
+    function createRTI(string memory _ipfsHash, uint256 _deadline) external payable {
+        require(msg.value > 0, "Bounty must be greater than 0");
+        require(_deadline > block.timestamp, "Deadline must be in the future");
+
+        rtiCount++;
+        rtiRequests[rtiCount] = RTIRequest({
+            requester: msg.sender,
+            ipfsHash: _ipfsHash,
+            bounty: msg.value,
+            deadline: _deadline,
+            responder: address(0),
+            responseIpfsHash: "",
+            status: RTIStatus.Pending
+        });
+
+        emit RTICreated(rtiCount, msg.sender, _ipfsHash, msg.value, _deadline);
+    }
+
+    function submitResponse(uint256 _rtiId, string memory _responseIpfsHash) external {
+        RTIRequest storage request = rtiRequests[_rtiId];
+        require(request.status == RTIStatus.Pending, "RTI not in pending state");
+        require(block.timestamp < request.deadline, "Deadline has passed");
+
+        request.responder = msg.sender;
+        request.responseIpfsHash = _responseIpfsHash;
+        request.status = RTIStatus.Responded;
+
+        emit ResponseSubmitted(_rtiId, msg.sender, _responseIpfsHash);
+    }
+
+    function verifyAndRelease(uint256 _rtiId) external {
+        RTIRequest storage request = rtiRequests[_rtiId];
+        require(msg.sender == admin, "Only admin can verify");
+        require(request.status == RTIStatus.Responded, "Response not submitted");
+
+        request.status = RTIStatus.Verified;
+        payable(request.responder).transfer(request.bounty);
+
+        emit BountyReleased(_rtiId, request.responder, request.bounty);
+    }
+
+    function refundBounty(uint256 _rtiId) external {
+        RTIRequest storage request = rtiRequests[_rtiId];
+        require(request.status == RTIStatus.Pending, "RTI not in pending state");
+        require(block.timestamp >= request.deadline, "Deadline not reached");
+
+        request.status = RTIStatus.Refunded;
+        payable(request.requester).transfer(request.bounty);
+
+        emit BountyRefunded(_rtiId, request.requester, request.bounty);
+    }
+}

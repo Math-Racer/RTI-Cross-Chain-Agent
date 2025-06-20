@@ -1,0 +1,478 @@
+//// deploy.js
+
+const hre = require("hardhat");
+
+async function main() {
+  const [deployer] = await hre.ethers.getSigners();
+
+  console.log("Deploying with:", deployer.address);
+
+  const RTICore = await hre.ethers.getContractFactory("RTICore");
+  const rtiCore = await RTICore.deploy();
+  await rtiCore.waitForDeployment();
+
+  const address = await rtiCore.getAddress();
+  console.log("✅ RTICore deployed to:", address);
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});
+
+
+
+////hardhat.config.js
+
+
+require("@nomicfoundation/hardhat-toolbox");
+require("dotenv").config();
+
+module.exports = {
+  solidity: {
+    compilers: [
+      { version: "0.8.19" },
+      { version: "0.8.28" }
+    ]
+  },
+  networks: {
+  localhost: {
+    url: "http://127.0.0.1:8545",
+    chainId: 31337,
+  },
+  amoy: {
+    url: process.env.AMOY_RPC_URL,
+    accounts: [process.env.PRIVATE_KEY],
+    gasPrice: 30_000_000_000,
+  },
+},
+  etherscan: {
+    apiKey: process.env.POLYGONSCAN_API_KEY
+  },
+  paths: {
+    sources: "./contracts",
+    tests: "./test",
+    cache: "./cache",
+    artifacts: "./artifacts"
+  },
+  hardhat: {
+      chainId: 31337, // Local Hardhat chain ID
+  }
+};
+
+
+
+
+
+////App.js
+
+
+
+import React, { useEffect, useState } from "react";
+import { JsonRpcProvider, Contract, Wallet, parseEther, formatEther } from "ethers";
+import RTICoreABI from "./abis/RTICore.json";
+
+const CONTRACT_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
+
+function App() {
+  const [contract, setContract] = useState(null);
+  const [department, setDepartment] = useState("");
+  const [query, setQuery] = useState("");
+  const [daysToRespond, setDaysToRespond] = useState(7);
+  const [bounty, setBounty] = useState("");
+  const [currentAccount, setCurrentAccount] = useState("");
+  const [departmentsList, setDepartmentsList] = useState([]);
+  const [requests, setRequests] = useState([]);
+  const [activeTab, setActiveTab] = useState("submit");
+  const [selectedRequestId, setSelectedRequestId] = useState(null);
+  const [file, setFile] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Setup contract
+  useEffect(() => {
+    const setup = async () => {
+      const provider = new JsonRpcProvider("http://127.0.0.1:8545");
+      const wallet = new Wallet(
+        "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80", 
+        provider
+      );
+      const contract = new Contract(CONTRACT_ADDRESS, RTICoreABI.abi, wallet);
+      setContract(contract);
+      setCurrentAccount(await wallet.getAddress());
+      fetchRequests(contract);
+    };
+    setup();
+  }, []);
+
+  // Fetch departments
+  useEffect(() => {
+    const fetchDepartments = async () => {
+      try {
+        const res = await fetch("https://mocki.io/v1/af7798b5-ecbb-4d77-b832-410f2b7a4425");
+        setDepartmentsList(await res.json());
+      } catch {
+        setDepartmentsList([
+          { id: "1", name: "Municipal Corporation" },
+          { id: "2", name: "Police Department" },
+          { id: "3", name: "Public Works" }
+        ]);
+      }
+    };
+    fetchDepartments();
+  }, []);
+
+  const fetchRequests = async (contract) => {
+    const requests = await contract.getAllRequests();
+    setRequests(requests);
+  };
+
+  const handleSubmit = async () => {
+    if (!contract || !department || !query || !bounty) return;
+    setIsLoading(true);
+    try {
+      const tx = await contract.createRequest(
+        department, 
+        query, 
+        daysToRespond, 
+        { value: parseEther(bounty) }
+      );
+      await tx.wait();
+      await fetchRequests(contract);
+      alert("RTI submitted successfully!");
+      setDepartment("");
+      setQuery("");
+      setBounty("");
+    } catch (error) {
+      alert(`Error: ${error.message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSubmitResponse = async () => {
+    if (!contract || selectedRequestId === null || !file) return;
+    setIsLoading(true);
+    try {
+      // Mock IPFS upload
+      const cid = `Qm${Math.random().toString(36).substring(2, 15)}`;
+      const tx = await contract.fulfillRequest(selectedRequestId, cid);
+      await tx.wait();
+      await fetchRequests(contract);
+      alert("Response submitted successfully!");
+      setSelectedRequestId(null);
+      setFile(null);
+    } catch (error) {
+      alert(`Error: ${error.message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleExpireRequests = async () => {
+    if (!contract) return;
+    setIsLoading(true);
+    try {
+      const tx = await contract.checkAndExpireRequests();
+      await tx.wait();
+      await fetchRequests(contract);
+      alert("Expired requests processed!");
+    } catch (error) {
+      alert(`Error: ${error.message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const StatusBadge = ({ status }) => {
+    const statusMap = {
+      0: { text: "PENDING", color: "bg-yellow-500" },
+      1: { text: "RESPONDED", color: "bg-green-500" },
+      2: { text: "EXPIRED", color: "bg-red-500" }
+    };
+    return (
+      <span className={`px-2 py-1 rounded-full text-xs text-white ${statusMap[status].color}`}>
+        {statusMap[status].text}
+      </span>
+    );
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-100 p-4">
+      <div className="max-w-6xl mx-auto bg-white rounded-lg shadow-md overflow-hidden">
+        <div className="p-6 bg-blue-600 text-white">
+          <h1 className="text-2xl font-bold">📜 Decentralized RTI Portal</h1>
+          <p className="text-sm">Account: {currentAccount}</p>
+        </div>
+
+        <div className="flex border-b">
+          <button
+            className={`px-4 py-2 ${activeTab === "submit" ? "border-b-2 border-blue-600" : ""}`}
+            onClick={() => setActiveTab("submit")}
+          >
+            Submit RTI
+          </button>
+          <button
+            className={`px-4 py-2 ${activeTab === "track" ? "border-b-2 border-blue-600" : ""}`}
+            onClick={() => setActiveTab("track")}
+          >
+            Track Requests
+          </button>
+          <button
+            className={`px-4 py-2 ${activeTab === "respond" ? "border-b-2 border-blue-600" : ""}`}
+            onClick={() => setActiveTab("respond")}
+          >
+            Official Response
+          </button>
+        </div>
+
+        <div className="p-6">
+          {activeTab === "submit" && (
+            <div className="space-y-4">
+              <h2 className="text-xl font-semibold">New RTI Request</h2>
+              <div>
+                <label className="block mb-1">Department</label>
+                <select
+                  value={department}
+                  onChange={(e) => setDepartment(e.target.value)}
+                  className="w-full p-2 border rounded"
+                >
+                  <option value="">Select Department</option>
+                  {departmentsList.map((dept) => (
+                    <option key={dept.id} value={dept.name}>{dept.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block mb-1">Query</label>
+                <textarea
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  className="w-full p-2 border rounded"
+                  rows={4}
+                />
+              </div>
+              <div>
+                <label className="block mb-1">Days to Respond</label>
+                <input
+                  type="number"
+                  value={daysToRespond}
+                  onChange={(e) => setDaysToRespond(e.target.value)}
+                  className="w-full p-2 border rounded"
+                />
+              </div>
+              <div>
+                <label className="block mb-1">Bounty (ETH)</label>
+                <input
+                  type="text"
+                  value={bounty}
+                  onChange={(e) => setBounty(e.target.value)}
+                  className="w-full p-2 border rounded"
+                />
+              </div>
+              <button
+                onClick={handleSubmit}
+                disabled={isLoading}
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+              >
+                {isLoading ? "Submitting..." : "Submit RTI"}
+              </button>
+            </div>
+          )}
+
+          {activeTab === "track" && (
+            <div>
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-semibold">RTI Requests</h2>
+                <button
+                  onClick={handleExpireRequests}
+                  disabled={isLoading}
+                  className="px-3 py-1 bg-red-500 text-white rounded text-sm"
+                >
+                  {isLoading ? "Processing..." : "Check Expired"}
+                </button>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-full">
+                  <thead>
+                    <tr>
+                      <th className="px-4 py-2">ID</th>
+                      <th className="px-4 py-2">Department</th>
+                      <th className="px-4 py-2">Bounty</th>
+                      <th className="px-4 py-2">Deadline</th>
+                      <th className="px-4 py-2">Status</th>
+                      <th className="px-4 py-2">Response</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {requests.map((request, index) => (
+                      <tr key={index}>
+                        <td className="px-4 py-2">{index}</td>
+                        <td className="px-4 py-2">{request.department}</td>
+                        <td className="px-4 py-2">{formatEther(request.bounty)} ETH</td>
+                        <td className="px-4 py-2">
+                          {new Date(request.deadline * 1000).toLocaleDateString()}
+                        </td>
+                        <td className="px-4 py-2">
+                          <StatusBadge status={request.status} />
+                        </td>
+                        <td className="px-4 py-2">
+                          {request.responseCID ? (
+                            <a
+                                href={`https://ipfs.io/ipfs/${request.responseCID}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+>
+  View
+</a>
+
+                          ) : "-"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "respond" && (
+            <div className="space-y-4">
+              <h2 className="text-xl font-semibold">Submit Response</h2>
+              <div>
+                <label className="block mb-1">Select Request</label>
+                <select
+                  value={selectedRequestId ?? ""}
+                  onChange={(e) => setSelectedRequestId(Number(e.target.value))}
+                  className="w-full p-2 border rounded"
+                >
+                  <option value="">Select Request</option>
+                  {requests
+                    .filter(req => req.status === 0)
+                    .map((req, index) => (
+                      <option key={index} value={index}>
+                        #{index} - {req.department}
+                      </option>
+                    ))}
+                </select>
+              </div>
+              {selectedRequestId !== null && (
+                <>
+                  <div>
+                    <label className="block mb-1">Upload Response</label>
+                    <input
+                      type="file"
+                      onChange={(e) => setFile(e.target.files[0])}
+                      className="w-full p-2 border rounded"
+                    />
+                  </div>
+                  <button
+                    onClick={handleSubmitResponse}
+                    disabled={!file || isLoading}
+                    className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+                  >
+                    {isLoading ? "Submitting..." : "Submit Response"}
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default App;
+
+
+
+
+
+
+////.sol file
+
+
+
+
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.19;
+
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+
+contract RTICore is ReentrancyGuard {
+    enum RequestStatus { PENDING, RESPONDED, EXPIRED }
+    
+    struct RTIRequest {
+        address requester;
+        string department;
+        string query;
+        uint256 bounty;
+        uint256 deadline;
+        RequestStatus status;
+        string responseCID;
+        address responder;
+    }
+    
+    uint256 public requestCount;
+    mapping(uint256 => RTIRequest) public requests;
+    
+    event RequestCreated(uint256 indexed requestId, address indexed requester, string department);
+    event RequestFulfilled(uint256 indexed requestId, string responseCID, address responder);
+    event RequestExpired(uint256 indexed requestId);
+    
+    function createRequest(
+        string memory _department,
+        string memory _query,
+        uint256 _daysToRespond
+    ) external payable {
+        require(msg.value > 0, "Bounty must be greater than 0");
+        require(_daysToRespond > 0, "Response days must be positive");
+        
+        requests[requestCount] = RTIRequest({
+            requester: msg.sender,
+            department: _department,
+            query: _query,
+            bounty: msg.value,
+            deadline: block.timestamp + (_daysToRespond * 1 days),
+            status: RequestStatus.PENDING,
+            responseCID: "",
+            responder: address(0)
+        });
+        
+        emit RequestCreated(requestCount, msg.sender, _department);
+        requestCount++;
+    }
+    
+    function fulfillRequest(uint256 _requestId, string memory _responseCID) external nonReentrant {
+        RTIRequest storage request = requests[_requestId];
+        
+        require(request.status == RequestStatus.PENDING, "Request not pending");
+        require(block.timestamp <= request.deadline, "Deadline passed");
+        
+        request.status = RequestStatus.RESPONDED;
+        request.responseCID = _responseCID;
+        request.responder = msg.sender;
+        
+        payable(msg.sender).transfer(request.bounty);
+        emit RequestFulfilled(_requestId, _responseCID, msg.sender);
+    }
+    
+    function checkAndExpireRequests() external {
+        for (uint256 i = 0; i < requestCount; i++) {
+            if (requests[i].status == RequestStatus.PENDING && 
+                block.timestamp > requests[i].deadline) {
+                requests[i].status = RequestStatus.EXPIRED;
+                payable(requests[i].requester).transfer(requests[i].bounty);
+                emit RequestExpired(i);
+            }
+        }
+    }
+    
+    function getAllRequests() external view returns (RTIRequest[] memory) {
+        RTIRequest[] memory allRequests = new RTIRequest[](requestCount);
+        for (uint256 i = 0; i < requestCount; i++) {
+            allRequests[i] = requests[i];
+        }
+        return allRequests;
+    }
+}

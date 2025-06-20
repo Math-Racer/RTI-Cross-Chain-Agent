@@ -1,21 +1,14 @@
+// scripts/deploy.js
 const hre = require("hardhat");
 
 async function main() {
-  const [deployer] = await hre.ethers.getSigners();
-  console.log("Deploying contracts with the account:", deployer.address);
+  const RTI = await hre.ethers.getContractFactory("RTI");
+  const rti = await RTI.deploy(); // ✅ Hardhat-Ethers deploys and waits automatically
+console.log("Contract deployed to:", rti.target); // in ethers v6, use `.target` instead of `.address`
 
-  // Get the contract factory
-  const RTICore = await hre.ethers.getContractFactory("RTICore");
-  
-  // Deploy the contract
-  const rtiCore = await RTICore.deploy();
-  
-  // Wait for deployment to complete (new syntax)
-  await rtiCore.waitForDeployment();
-  
-  // Get the deployed address (new syntax)
-  const contractAddress = await rtiCore.getAddress();
-  console.log("RTICore deployed to:", contractAddress);
+
+ console.log("RTI contract deployed to:", rti.target); // ✅ Ethers v6
+
 }
 
 main()

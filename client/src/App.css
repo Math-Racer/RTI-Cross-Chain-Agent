@@ -1,0 +1,346 @@
+/* client/src/App.css */
+:root {
+  --primary-purple: #8a2be2;
+  --primary-pink: #ff6bff;
+  --primary-violet: #9400d3;
+  --gradient-bg: linear-gradient(135deg, #f5f7fa 0%, #e4e8f0 100%);
+  --card-bg: rgba(255, 255, 255, 0.8);
+  --glass-bg: rgba(255, 255, 255, 0.2);
+  --text-dark: #2d3748;
+  --text-light: #f8fafc;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  margin: 0;
+  padding: 0;
+  line-height: 1.6;
+  color: var(--text-dark);
+  background: var(--gradient-bg);
+  min-height: 100vh;
+}
+
+.App {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+  padding: 20px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(10px);
+  border-radius: 16px;
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+header h1 {
+  margin: 0;
+  background: linear-gradient(90deg, var(--primary-purple), var(--primary-pink));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font-size: 2rem;
+  font-weight: 700;
+}
+
+.account-info {
+  font-size: 0.9em;
+  background: var(--card-bg);
+  padding: 8px 16px;
+  border-radius: 12px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+}
+
+.error-message {
+  background: #ffebee;
+  color: #c62828;
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  border-left: 4px solid #c62828;
+}
+
+.loading-indicator {
+  background: var(--glass-bg);
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  text-align: center;
+  color: var(--primary-violet);
+  font-weight: 500;
+}
+
+nav {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 30px;
+}
+
+nav button {
+  padding: 12px 24px;
+  border: none;
+  border-radius: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background: linear-gradient(135deg, var(--primary-purple), var(--primary-violet));
+  color: white;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+nav button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px rgba(138, 43, 226, 0.2);
+}
+
+nav button:disabled {
+  background: #ccc;
+  transform: none;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+main {
+  background: var(--card-bg);
+  backdrop-filter: blur(10px);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+/* RTI List Styles */
+.rti-list {
+  width: 100%;
+}
+
+.rti-list h2 {
+  color: var(--primary-violet);
+  margin-bottom: 20px;
+}
+
+.rti-list table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin-bottom: 20px;
+  background: var(--card-bg);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+}
+
+.rti-list th {
+  background: linear-gradient(135deg, var(--primary-purple), var(--primary-pink));
+  color: white;
+  padding: 16px;
+  text-align: left;
+}
+
+.rti-list td {
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.rti-list tr:last-child td {
+  border-bottom: none;
+}
+
+.rti-list tr:hover {
+  background: rgba(138, 43, 226, 0.05);
+}
+
+.rti-list button, .rti-list a {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 8px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-right: 8px;
+  text-decoration: none;
+  display: inline-block;
+}
+
+.rti-list a {
+  background: #6366f1;
+  color: white;
+}
+
+.rti-list button {
+  background: linear-gradient(135deg, var(--primary-pink), var(--primary-violet));
+  color: white;
+}
+
+.rti-list button:hover, .rti-list a:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.response-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--card-bg);
+  backdrop-filter: blur(10px);
+  padding: 24px;
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  z-index: 100;
+  width: 90%;
+  max-width: 500px;
+}
+
+.response-modal h3 {
+  margin-top: 0;
+  color: var(--primary-purple);
+}
+
+.response-modal textarea {
+  width: 100%;
+  min-height: 150px;
+  margin: 16px 0;
+  padding: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.response-modal div {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.response-modal button {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.response-modal button:first-child {
+  background: linear-gradient(135deg, var(--primary-purple), var(--primary-pink));
+  color: white;
+}
+
+.response-modal button:last-child {
+  background: transparent;
+  color: var(--primary-purple);
+  border: 1px solid var(--primary-purple);
+}
+
+/* RTI Form Styles */
+.rti-form {
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.rti-form h2 {
+  color: var(--primary-violet);
+  margin-bottom: 24px;
+  text-align: center;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: var(--primary-purple);
+}
+
+.form-group input[type="text"],
+.form-group input[type="number"],
+.form-group textarea,
+.form-group input[type="file"] {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  background: var(--card-bg);
+  font-family: inherit;
+  transition: border 0.3s ease;
+}
+
+.form-group input[type="text"]:focus,
+.form-group input[type="number"]:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: var(--primary-pink);
+  box-shadow: 0 0 0 2px rgba(138, 43, 226, 0.1);
+}
+
+.form-group textarea {
+  min-height: 120px;
+}
+
+.rti-form button {
+  width: 100%;
+  padding: 14px;
+  background: linear-gradient(135deg, var(--primary-purple), var(--primary-pink));
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin-top: 10px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.rti-form button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px rgba(138, 43, 226, 0.2);
+}
+
+/* Status Badges */
+.Pending {
+  color: #f59e0b;
+  font-weight: 500;
+}
+
+.Responded {
+  color: #10b981;
+  font-weight: 500;
+}
+
+.Verified {
+  color: #3b82f6;
+  font-weight: 500;
+}
+
+.Rejected {
+  color: #ef4444;
+  font-weight: 500;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  
+  .rti-list table {
+    display: block;
+    overflow-x: auto;
+  }
+  
+  .response-modal {
+    width: 95%;
+    padding: 16px;
+  }
+}
