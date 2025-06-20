@@ -1,4 +1,3 @@
-# backend/app.py
 from flask import Flask, jsonify, request, send_file
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.utils import secure_filename
@@ -9,9 +8,7 @@ from web3 import Web3
 import io
 import json
 
-# Initialize Flask app with simplified CORS configuration
 app = Flask(__name__)
-# Single CORS configuration that replaces both previous configs
 CORS(app, resources={
     r"/*": {
         "origins": "http://localhost:3000",
@@ -29,29 +26,23 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max
 
 db = SQLAlchemy(app)
 
-# Web3 initialization with error handling
+# Web3 initialization
 try:
     w3 = Web3(Web3.HTTPProvider('http://localhost:8545'))
     if not w3.is_connected():
         raise ConnectionError("Failed to connect to Ethereum node")
     
-    # Load contract ABI
     with open('RTI.json') as f:
         contract_abi = json.load(f)['abi']
     
-    # Default Hardhat local node contract address
     contract_address = "0x5FbDB2315678afecb367f032d93F642f64180aa3"
     rti_contract = w3.eth.contract(address=contract_address, abi=contract_abi)
-    
-    # Verify contract is accessible
-    if not rti_contract:
-        raise ValueError("Failed to initialize contract")
         
 except Exception as e:
     print(f"Web3 initialization error: {str(e)}")
     rti_contract = None
 
-# Database model (unchanged)
+# Database model with blockchain_id
 class RTIRequest(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     citizen_address = db.Column(db.String(42), nullable=False)
@@ -67,8 +58,9 @@ class RTIRequest(db.Model):
     officer_address = db.Column(db.String(42))
     rejection_reason = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    blockchain_id = db.Column(db.Integer)  # Added field
 
-# Routes (with improved Web3 usage)
+# Routes
 @app.route('/rtis', methods=['GET', 'POST', 'OPTIONS'])
 def handle_rtis():
     if request.method == 'OPTIONS':
@@ -106,21 +98,27 @@ def create_rti():
         if not rti_contract:
             raise ValueError("Blockchain connection not available")
             
-        # Use Web3.to_wei instead of w3.toWei
         tx_hash = rti_contract.functions.createRTI(
             data.get('title'),
             data.get('description'),
             int(deadline.timestamp())
         ).transact({
             'from': data.get('citizen_address'),
-            'value': Web3.to_wei(bounty, 'ether'),  # Fixed Web3 conversion
+            'value': Web3.to_wei(bounty, 'ether'),
             'gas': 1000000
         })
+        
+        # Get blockchain ID
+        tx_receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
+        blockchain_id = rti_contract.functions.getRTICount().call() - 1
+        new_rti.blockchain_id = blockchain_id
+        db.session.commit()
         
         return jsonify({
             'success': True,
             'message': 'RTI created successfully',
             'rti_id': new_rti.id,
+            'blockchain_id': blockchain_id,
             'tx_hash': tx_hash.hex()
         }), 201
     except Exception as e:
@@ -134,6 +132,7 @@ def get_rtis():
     for rti in rtis:
         result.append({
             'id': rti.id,
+            'blockchain_id': rti.blockchain_id,
             'title': rti.title,
             'description': rti.description,
             'bounty': rti.bounty,
@@ -169,7 +168,7 @@ def respond_to_rti():
             raise ValueError("Blockchain connection not available")
             
         tx_hash = rti_contract.functions.submitResponse(
-            rti_id,
+            rti.blockchain_id,
             response_text
         ).transact({
             'from': officer_address,
@@ -200,19 +199,19 @@ def verify_rti():
     if rti.status != 'Responded':
         return jsonify({'success': False, 'error': 'RTI not in Responded state'}), 400
     
-    rti.status = 'Verified'
-    db.session.commit()
-    
     try:
         if not rti_contract:
             raise ValueError("Blockchain connection not available")
             
         tx_hash = rti_contract.functions.verifyAndRelease(
-            rti_id
+            rti.blockchain_id
         ).transact({
             'from': admin_address,
             'gas': 1000000
         })
+        
+        rti.status = 'Verified'
+        db.session.commit()
         
         return jsonify({
             'success': True,
@@ -220,6 +219,7 @@ def verify_rti():
             'tx_hash': tx_hash.hex()
         })
     except Exception as e:
+        db.session.rollback()
         return jsonify({'success': False, 'error': str(e)}), 400
 
 @app.route('/refund', methods=['POST', 'OPTIONS'])
@@ -240,19 +240,19 @@ def refund_rti():
     if datetime.utcnow() < rti.deadline:
         return jsonify({'success': False, 'error': 'Deadline not yet passed'}), 400
     
-    rti.status = 'Refunded'
-    db.session.commit()
-    
     try:
         if not rti_contract:
             raise ValueError("Blockchain connection not available")
             
         tx_hash = rti_contract.functions.refundBounty(
-            rti_id
+            rti.blockchain_id
         ).transact({
             'from': rti.citizen_address,
             'gas': 1000000
         })
+        
+        rti.status = 'Refunded'
+        db.session.commit()
         
         return jsonify({
             'success': True,
@@ -260,6 +260,7 @@ def refund_rti():
             'tx_hash': tx_hash.hex()
         })
     except Exception as e:
+        db.session.rollback()
         return jsonify({'success': False, 'error': str(e)}), 400
 
 @app.route('/download/<int:rti_id>', methods=['GET'])
@@ -275,22 +276,9 @@ def download_file(rti_id):
         download_name=rti.file_name
     )
 
-def initialize_contract(address):
-    global contract_address, rti_contract
-    contract_address = address
-    rti_contract = w3.eth.contract(address=address, abi=contract_abi)
-
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
-        # Initialize contract if not already done
-        if not rti_contract and contract_address:
-            try:
-                rti_contract = w3.eth.contract(address=contract_address, abi=contract_abi)
-                print(f"Contract initialized at {contract_address}")
-            except Exception as e:
-                print(f"Failed to initialize contract: {str(e)}")
-    
     app.run(debug=True, port=5000)
 
 """ # app.py
